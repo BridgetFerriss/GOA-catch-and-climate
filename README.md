@@ -1,2 +1,13 @@
 # GOA-catch-and-climate
-paper with Mike
+
+## Folder Descriptions
+
+### CODE 
+
+### DATA 
+commercial catch data and metadata files
+
+### MEETING NOTES 
+project planning notes
+
+### RESULTS 
