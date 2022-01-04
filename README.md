@@ -1,7 +1,5 @@
 # GOA-catch-and-climate
 
-## Folder Descriptions
-
 ### CODE 
 
 ### DATA 
