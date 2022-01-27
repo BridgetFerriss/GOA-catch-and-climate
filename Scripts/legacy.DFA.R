@@ -4,7 +4,10 @@
 library(tidyverse)
 library(MARSS)
 theme_set(theme_bw())
+# set colors
+cb <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
 
+## data processing -------------------------------------
 dat <- read.csv("./Data/legacy.goa.catch.csv")
 
 head(dat)
@@ -85,8 +88,7 @@ ggplot(dfa.dat, aes(value)) +
   geom_histogram(bins = 12, fill = "grey", color = "black") +
   facet_wrap(~name, scales = "free")
 
-# fit a DFA model ---------------------------------------------
-# (commenting this out, uncomment to run model selection)
+# DFA model selection ---------------------------------------------
 # set up data
 
 dfa.dat <- dfa.dat %>%
@@ -133,3 +135,89 @@ model.data
 # save model selection table
 write.csv(model.data, "./Results/legacy catch dfa model selection table 1956-1990.csv",
           row.names = F)
+
+## fit the best model --------------------------------------------------
+model.list = list(A="zero", m=2, R="unconstrained") # best model for early era
+
+# not sure that these changes to control list are needed for this best model, but using them again!
+cntl.list = list(minit=200, maxit=20000, allow.degen=FALSE, conv.test.slope.tol=0.1, abstol=0.0001)
+
+mod = MARSS(dfa.dat, model=model.list, z.score=TRUE, form="dfa", control=cntl.list)
+
+# this model has convergence problems - plot to evaluate
+
+# and rotate the loadings
+Z.est = coef(mod, type="matrix")$Z
+H.inv = varimax(coef(mod, type="matrix")$Z)$rotmat
+Z.rot = as.data.frame(Z.est %*% H.inv)
+
+# reverse trend 2 to plot
+# Z.rot[,2] <- -Z.rot[,2]
+
+Z.rot$names <- rownames(dfa.dat)
+Z.rot <- arrange(Z.rot, V1)
+Z.rot <- gather(Z.rot[,c(1,2)])
+Z.rot$names <- rownames(dfa.dat)
+Z.rot$plot.names <- reorder(Z.rot$names, 1:length(Z.rot$names))
+
+loadings1 <- ggplot(Z.rot, aes(plot.names, value, fill=key)) + geom_bar(stat="identity", position="dodge") +
+  ylab("Loading") + xlab("") + ggtitle("1956-1990 legacy catch - unconstrained") + 
+  scale_fill_manual(values=cb[2:3]) +
+  theme(legend.position = c(0.8,0.2), legend.title=element_blank()) + geom_hline(yintercept = 0) +
+  theme(axis.text.x  = element_text(angle=45, hjust=1, size=12)) 
+
+# compare with loadings for 2nd-best model
+model.list = list(A="zero", m=2, R="diagonal and unequal") # best model for early era
+mod2 = MARSS(dfa.dat, model=model.list, z.score=TRUE, form="dfa", control=cntl.list)
+
+# this model converges easily
+
+# and rotate the loadings
+Z.est = coef(mod2, type="matrix")$Z
+H.inv = varimax(coef(mod2, type="matrix")$Z)$rotmat
+Z.rot = as.data.frame(Z.est %*% H.inv)
+
+# reverse trend 2 to plot
+# Z.rot[,2] <- -Z.rot[,2]
+
+Z.rot$names <- rownames(dfa.dat)
+Z.rot <- arrange(Z.rot, V1)
+Z.rot <- gather(Z.rot[,c(1,2)])
+Z.rot$names <- rownames(dfa.dat)
+Z.rot$plot.names <- reorder(Z.rot$names, 1:length(Z.rot$names))
+
+loadings2 <- ggplot(Z.rot, aes(plot.names, value, fill=key)) + geom_bar(stat="identity", position="dodge") +
+  ylab("Loading") + xlab("") + ggtitle("1956-1990 legacy catch - diagonal and unequal") + 
+  scale_fill_manual(values=cb[2:3]) +
+  theme(legend.position = c(0.8,0.2), legend.title=element_blank()) + geom_hline(yintercept = 0) +
+  theme(axis.text.x  = element_text(angle=45, hjust=1, size=12)) 
+
+# save a fig combining loadings plots for each model
+png("./Figs/legacy_dfa_mod1_mod2_loadings_plot.png", 
+    width=5, height=8, units='in', res=300)
+
+ggpubr::ggarrange(loadings1, loadings2, nrow = 2, ncol = 1)
+
+dev.off()
+
+# loadings are generally similar, especially for trend 1
+# propose for now that we use model 2
+
+# plot trends for mod2
+# first rotate the trends!
+H.inv = varimax(coef(mod2, type="matrix")$Z)$rotmat
+trends.rot = solve(H.inv) %*% mod2$states
+
+trends.plot <- data.frame(year = 1956:1990,
+                          trend1 = trends.rot[1,],
+                          trend2 = trends.rot[2,]) %>%
+  pivot_longer(cols = -year)
+
+ggplot(trends.plot, aes(year, value, color = name)) +
+  geom_line() +
+  scale_color_manual(values = cb[2:3]) +
+  ggtitle("1956-1990 legacy catch - diagonal and unequal") +
+  theme(axis.title.x = element_blank()) +
+  geom_hline(yintercept = 0)
+
+ggsave("./Figs/legacy_catch_trend_plot_diagonal_unequal.png", width = 5.5, height = 3, units = 'in')
