@@ -9,14 +9,31 @@ cb <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E
 
 ## data processing -------------------------------------
 #datL <- read.csv("./Data/legacy.goa.catch.csv")
-dat <- read.csv("./Data/current.goa.catch.csv")
+dat <- read.csv("../Data/current.goa.catch.csv")
+salmon.dat<-read.csv("../Data/ADFG_salmon_1985_2020.csv")
 
 head(dat)
+head(salmon.dat)
 
-# subset data to relevant columns catch (mt) (columns 1:11)
+#tidy salmon data to summarize catch (lbs - convert to mt) by species, region, year; and remove 2021 prelim data
+salmon.dat<- salmon.dat %>%
+  filter(Region_Desc=="Southeastern Region"| Region_Desc=="Central Region" | Region_Desc=="Westward Region") %>%
+  filter(Management_Area!="M" | Management_Area!="T" | Management_Area!="F") %>%  #T=Bristol Bay, M = both sides AK peninsula, F =Atka-Amlia in Westward REgion
+  mutate(catch_mt=Landed_Weight_lbs*0.000453592) %>% #convert catch_lbs to catch_mt
+   select(year, catch_mt, Species_Name) %>%
+  group_by(year, Species_Name) %>%
+  summarise(catch_mt_sum=sum(catch_mt)) %>%
+  spread(Species_Name,catch_mt_sum)  
+
+#join salmon data to other species ctach data
+
+salmon.dat2<-salmon.dat %>%
+  filter(year %in% 1992:2020)    #years will match other catch data
+
 dat <- dat %>%
-  select(year:TannerCrab_mt)  %>%
-  filter(year %in% 1992:2020) #remove 1991 - some catch data much lower
+  select(year:TannerCrab_mt)  %>% #select certain columns in 'dat' dataset
+  filter(year %in% 1992:2020) %>% #remove 1991 - some catch data much lower
+  full_join(salmon.dat2, by="year") #
 
 head(dat)
 
@@ -123,7 +140,7 @@ model.data <- model.data %>%
 model.data
 
 # save model selection table
-write.csv(model.data, "./Results/current catch dfa model selection table 1992-2020.csv",
+write.csv(model.data, "../Results/current catch dfa model selection table 1992-2020.csv",
           row.names = F)
 
 ## fit the best model --------------------------------------------------
@@ -183,7 +200,7 @@ loadings2 <- ggplot(Z.rot, aes(plot.names, value, fill=key)) + geom_bar(stat="id
   theme(axis.text.x  = element_text(angle=45, hjust=1, size=12)) 
 
 # save a fig combining loadings plots for each model
-png("./Figs/current_dfa_mod1_mod2_loadings_plot.png", 
+png("../Figs/current_dfa_mod1_mod2_loadings_plot.png", 
     width=5, height=8, units='in', res=300)
 
 ggpubr::ggarrange(loadings1, loadings2, nrow = 2, ncol = 1)
@@ -210,4 +227,5 @@ ggplot(trends.plot, aes(year, value, color = name)) +
   theme(axis.title.x = element_blank()) +
   geom_hline(yintercept = 0)
 
-ggsave("./Figs/current_catch_trend_plot_diagonal_unequal.png", width = 5.5, height = 3, units = 'in')
+ggsave("../Figs/current_catch_trend_plot_diagonal_unequal.png", width = 5.5, height = 3, units = 'in')
+
